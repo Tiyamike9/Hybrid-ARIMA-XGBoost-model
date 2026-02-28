@@ -61,7 +61,7 @@ perform_adf_test <- function(data) {
 
   cat("Testing ORIGINAL Series:\n")
   cat("----------------------------\n")
-  adf_original <- adf.test(insurance_series)
+  adf_original <- suppressWarnings(adf.test(insurance_series))
   cat("Test Statistic:", round(adf_original$statistic, 6), "\n")
   cat("P-value:", sprintf("%.10f", adf_original$p.value), "\n")
 
@@ -74,7 +74,7 @@ perform_adf_test <- function(data) {
     cat("Testing FIRST DIFFERENCE (d=1):\n")
     cat("----------------------------\n")
     diff_series <- diff(insurance_series, differences = 1)
-    adf_diff1 <- adf.test(diff_series)
+    adf_diff1 <- suppressWarnings(adf.test(diff_series))
     cat("Test Statistic:", round(adf_diff1$statistic, 6), "\n")
     cat("P-value:", sprintf("%.10f", adf_diff1$p.value), "\n")
 
@@ -87,7 +87,7 @@ perform_adf_test <- function(data) {
       cat("Testing SECOND DIFFERENCE (d=2):\n")
       cat("----------------------------\n")
       diff_series2 <- diff(insurance_series, differences = 2)
-      adf_diff2 <- adf.test(diff_series2)
+      adf_diff2 <- suppressWarnings(adf.test(diff_series2))
       cat("Test Statistic:", round(adf_diff2$statistic, 6), "\n")
       cat("P-value:", sprintf("%.10f", adf_diff2$p.value), "\n")
 
@@ -291,16 +291,21 @@ compare_arima_models <- function(data, d_value) {
           for (Q in Q_range) {
             tested <- tested + 1
             tryCatch({
-              model <- arima(ts_data, order = c(p, d_value, q),
-                             seasonal = list(order = c(P, D, Q), period = 12),
-                             method = "ML")
-              converged <- converged + 1
-              results <- rbind(results, data.frame(
-                p = p, d = d_value, q = q,
-                P = P, D = D, Q = Q,
-                AIC = model$aic,
-                BIC = AIC(model, k = log(length(ts_data)))
-              ))
+              model <- suppressWarnings(
+                arima(ts_data, order = c(p, d_value, q),
+                      seasonal = list(order = c(P, D, Q), period = 12),
+                      method = "ML")
+              )
+              # Skip models with invalid AIC (NaN from log(s2) issues)
+              if (!is.na(model$aic) && is.finite(model$aic)) {
+                converged <- converged + 1
+                results <- rbind(results, data.frame(
+                  p = p, d = d_value, q = q,
+                  P = P, D = D, Q = Q,
+                  AIC = model$aic,
+                  BIC = AIC(model, k = log(length(ts_data)))
+                ))
+              }
             }, error = function(e) {
               # Model did not converge - skip
             })
